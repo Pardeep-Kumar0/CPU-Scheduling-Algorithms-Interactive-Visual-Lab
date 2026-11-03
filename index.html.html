@@ -1,0 +1,2225 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CPU Scheduling Visual Lab v2.0 — OS Stage & State Visualizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            notion: {
+              bg: '#191919',
+              card: '#202020',
+              hover: '#2c2c2c',
+              border: '#2f2f2f',
+              text: '#e6e6e4',
+              muted: '#9b9a97',
+              lightBg: '#ffffff',
+              lightCard: '#f7f6f3',
+              lightBorder: '#e9e9e7',
+              lightText: '#37352f',
+              lightMuted: '#787774'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(155, 154, 151, 0.35); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(155, 154, 151, 0.6); }
+
+    /* Animated Stage Connectors */
+    @keyframes flowDash {
+      to { stroke-dashoffset: -24; }
+    }
+    .flow-active {
+      stroke-dasharray: 6 6;
+      animation: flowDash 0.6s linear infinite;
+    }
+
+    @keyframes pulseRing {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
+      50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    }
+    .cpu-glow { animation: pulseRing 1.6s infinite; }
+
+    @keyframes popIn {
+      0% { transform: scale(0.92); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .pcb-card { animation: popIn 0.22s ease-out; }
+  </style>
+</head>
+<body class="bg-notion-lightBg text-notion-lightText dark:bg-notion-bg dark:text-notion-text min-h-screen antialiased selection:bg-blue-500/20">
+
+  <div class="max-w-7xl mx-auto px-3 sm:px-5 py-4 space-y-4">
+
+    <!-- ===================================================================== -->
+    <!-- TOP HEADER & NAVIGATION                                               -->
+    <!-- ===================================================================== -->
+    <header class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-3.5 sm:p-4 shadow-sm">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div class="flex items-start sm:items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0">
+            ⚙️
+          </div>
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                UNIT–II • Process Management (v2.0)
+              </span>
+              <span class="text-[11px] font-mono text-notion-lightMuted dark:text-notion-muted">
+                Interactive OS Stage & Gantt Simulator
+              </span>
+            </div>
+            <h1 class="text-lg sm:text-xl font-bold tracking-tight mt-0.5">
+              CPU Scheduling Algorithms & Process Stage Interaction Lab
+            </h1>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button onclick="switchTab('simulator')" id="tab-simulator" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-600 text-white shadow-sm">
+            ⚡ Stage & Gantt Lab
+          </button>
+          <button onclick="switchTab('compare')" id="tab-compare" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-notion-lightMuted dark:text-notion-muted">
+            ⚖️ Compare All (9 Algos)
+          </button>
+          <button onclick="switchTab('concepts')" id="tab-concepts" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-notion-lightMuted dark:text-notion-muted">
+            📖 Interactive Notes & Queues
+          </button>
+          <button onclick="switchTab('quiz')" id="tab-quiz" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-notion-lightMuted dark:text-notion-muted">
+            🎯 Exam Drill
+          </button>
+          <div class="h-4 w-[1px] bg-notion-lightBorder dark:bg-notion-border mx-1 hidden sm:block"></div>
+          <button onclick="toggleTheme()" class="p-1.5 rounded-lg border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5 text-xs" title="Toggle Dark/Light Theme">
+            <span id="theme-icon">☀️</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: SIMULATOR, INTERACTIVE OS STAGE PIPELINE & GANTT CHART         -->
+    <!-- ===================================================================== -->
+    <section id="view-simulator" class="space-y-4">
+
+      <!-- Top Control Row: Algorithm Picker + Process Editor -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Left 8 Cols: Algorithm & Preset Selector -->
+        <div class="lg:col-span-8 bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-notion-lightMuted dark:text-notion-muted">1. Scheduling Policy</span>
+              <span id="algo-type-badge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                Preemptive
+              </span>
+            </div>
+
+            <!-- Preset Dropdown (Defaults to Diff AT so Not Arrived Yet is immediately visible!) -->
+            <div class="flex items-center gap-2">
+              <label for="preset-select" class="text-xs font-medium text-notion-lightMuted dark:text-notion-muted">📒 Notion Note Example:</label>
+              <select id="preset-select" onchange="loadPreset(this.value)" class="text-xs font-medium bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="srtf_s2" selected>8.2 SRTF (Preemptive SJF) — Diff Arrival Times (Recommended)</option>
+                <option value="fcfs_s2">8.1 FCFS — Scenario 2 (Diff Arrival Times)</option>
+                <option value="fcfs_ex3">8.1 FCFS — 5-Process Staggered Arrival Table</option>
+                <option value="fcfs_s1">8.1 FCFS — Scenario 1 (All Arrive at t=0)</option>
+                <option value="sjf_ex1">8.2 SJF (Non-Preemptive) — Diff Arrival Times</option>
+                <option value="sjf_s1">8.2 SJF / SRTF — Scenario 1 (All Arrive at t=0)</option>
+                <option value="ljf_ex">8.2 LJF (Non-Preemptive) — 5-Process Note Table</option>
+                <option value="lrjf_ex">8.2 LRJF (Preemptive LJF) — 5-Process Note Table</option>
+                <option value="prio_np">8.3 Priority (Non-Preemptive) — Lower # = Higher Prio</option>
+                <option value="prio_p_diff">8.3 Priority (Preemptive, Diff AT) — Higher # = Higher Prio</option>
+                <option value="prio_p_same">8.3 Priority (Preemptive, Same AT) — Higher # = Higher Prio</option>
+                <option value="rr_ex0">8.4 Round Robin — 4-Process Note Table (TQ=3)</option>
+                <option value="rr_s2">8.4 Round Robin — Scenario 2 (Diff AT, TQ=2)</option>
+                <option value="rr_s1">8.4 Round Robin — Scenario 1 (Same AT, TQ=2)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Algorithm Pill Groups -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <!-- Non-Preemptive -->
+            <div class="p-2.5 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-notion-lightBorder dark:border-notion-border">
+              <div class="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mb-2">
+                🔒 Non-Preemptive (Runs until completion or I/O)
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="setAlgorithm('FCFS')" id="algo-FCFS" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">FCFS</button>
+                <button onclick="setAlgorithm('SJF')" id="algo-SJF" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">SJF</button>
+                <button onclick="setAlgorithm('LJF')" id="algo-LJF" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">LJF</button>
+                <button onclick="setAlgorithm('PRIO_NP')" id="algo-PRIO_NP" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">Priority (NP)</button>
+                <button onclick="setAlgorithm('HRRN')" id="algo-HRRN" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">HRRN</button>
+              </div>
+            </div>
+
+            <!-- Preemptive -->
+            <div class="p-2.5 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] border border-notion-lightBorder dark:border-notion-border">
+              <div class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mb-2">
+                ⚡ Preemptive (Can interrupt running process mid-burst)
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="setAlgorithm('SRTF')" id="algo-SRTF" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">SRTF (SRJF)</button>
+                <button onclick="setAlgorithm('LRTF')" id="algo-LRTF" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">LRJF (LRTF)</button>
+                <button onclick="setAlgorithm('PRIO_P')" id="algo-PRIO_P" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">Priority (P)</button>
+                <button onclick="setAlgorithm('RR')" id="algo-RR" class="algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all">Round Robin</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Conditional Parameters (TQ / Priority Convention) -->
+          <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-notion-lightBorder dark:border-notion-border">
+            <div id="param-rr" class="hidden flex items-center gap-2.5 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg">
+              <label class="text-xs font-semibold text-blue-600 dark:text-blue-400">⏱️ Time Quantum (TQ):</label>
+              <input type="range" id="tq-slider" min="1" max="10" value="2" oninput="updateTQ(this.value)" class="w-24 accent-blue-600 cursor-pointer" />
+              <span id="tq-value" class="mono text-xs font-bold px-2 py-0.5 rounded bg-blue-600 text-white">2 ms</span>
+              <span id="tq-hint" class="text-[11px] text-emerald-500 font-medium">Balanced</span>
+            </div>
+
+            <div id="param-prio" class="hidden flex flex-wrap items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-lg">
+              <span class="text-xs font-semibold text-purple-600 dark:text-purple-400">🏆 Priority Convention:</span>
+              <button onclick="setPriorityRule('lower')" id="prio-rule-lower" class="px-2 py-0.5 rounded text-xs font-medium bg-purple-600 text-white">
+                Lower # = Higher Priority (1 is highest)
+              </button>
+              <button onclick="setPriorityRule('higher')" id="prio-rule-higher" class="px-2 py-0.5 rounded text-xs font-medium bg-transparent text-notion-lightMuted dark:text-notion-muted">
+                Higher # = Higher Priority (3 is highest)
+              </button>
+            </div>
+
+            <div id="algo-summary-line" class="text-xs text-notion-lightMuted dark:text-notion-muted flex-1"></div>
+          </div>
+        </div>
+
+        <!-- Right 4 Cols: Editable Process Queue Table -->
+        <div class="lg:col-span-4 bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 flex flex-col justify-between">
+          <div>
+            <div class="flex flex-wrap items-center justify-between gap-1 mb-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-notion-lightMuted dark:text-notion-muted">2. Process Input Table</span>
+              <div class="flex items-center gap-1">
+                <button onclick="staggerArrivalTimes()" class="text-[11px] font-medium px-2 py-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20" title="Set AT = 0, 1, 2... so processes arrive one by one">
+                  🪜 Stagger ATs
+                </button>
+                <button onclick="addProcess()" class="text-[11px] font-semibold px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition">
+                  + Add
+                </button>
+                <button onclick="resetToCurrentPreset()" class="text-xs px-2 py-1 rounded border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5" title="Reset Preset">
+                  ↺
+                </button>
+              </div>
+            </div>
+
+            <div class="max-h-44 overflow-y-auto pr-1">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-notion-lightBorder dark:border-notion-border text-[11px] text-notion-lightMuted dark:text-notion-muted">
+                    <th class="py-1">PID</th>
+                    <th class="py-1">Arrival (AT)</th>
+                    <th class="py-1">Burst (BT)</th>
+                    <th class="py-1">Priority</th>
+                    <th class="py-1 text-right">Del</th>
+                  </tr>
+                </thead>
+                <tbody id="process-editor-body" class="text-xs mono divide-y divide-notion-lightBorder/60 dark:divide-notion-border/60"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-2 border-t border-notion-lightBorder dark:border-notion-border flex items-center justify-between text-[11px] text-notion-lightMuted dark:text-notion-muted">
+            <span>Tip: Change AT &gt; 0 to see processes in "Not Arrived Yet"</span>
+            <span id="total-burst-badge" class="mono font-semibold text-notion-lightText dark:text-notion-text">Total BT: 16 ms</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- INTERACTIVE OS PROCESS LIFECYCLE & STAGE INTERACTION VISUALIZER     -->
+      <!-- =================================================================== -->
+      <div class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 space-y-4">
+
+        <!-- Clock & Playback Control Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-notion-lightBorder dark:border-notion-border">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button onclick="stepToPreArrival()" class="px-2.5 py-1.5 rounded-lg border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5 text-xs font-semibold" title="View Job Pool before t=0">
+              🗂️ Pre-Start (Job Pool)
+            </button>
+            <button onclick="stepToStart()" class="px-2.5 py-1.5 rounded-lg border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5 text-xs font-semibold" title="Jump to t=0">
+              ⏮ t=0
+            </button>
+            <button onclick="stepBackward()" class="px-2.5 py-1.5 rounded-lg border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5 text-xs font-semibold">
+              ◀ -1ms
+            </button>
+            <button onclick="togglePlay()" id="play-btn" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5">
+              <span id="play-icon">▶</span> <span id="play-label">Play Step-by-Step</span>
+            </button>
+            <button onclick="stepForward()" class="px-2.5 py-1.5 rounded-lg border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5 text-xs font-semibold">
+              +1ms ▶
+            </button>
+            <button onclick="stepToEnd()" class="px-2.5 py-1.5 rounded-lg border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5 text-xs font-semibold" title="Jump to Final Completion">
+              End ⏭
+            </button>
+          </div>
+
+          <!-- Scrubber -->
+          <div class="flex items-center gap-2.5 flex-1 min-w-[220px] max-w-md">
+            <span class="text-xs font-semibold text-notion-lightMuted dark:text-notion-muted shrink-0">CPU Clock:</span>
+            <input type="range" id="time-scrubber" min="-1" max="16" value="0" oninput="scrubTime(this.value)" class="w-full accent-blue-600 cursor-pointer" />
+            <span id="clock-readout" class="mono text-xs sm:text-sm font-bold px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0">
+              t = 0 ms
+            </span>
+          </div>
+
+          <!-- Speed & I/O Trigger -->
+          <div class="flex items-center gap-2">
+            <button onclick="triggerManualIO()" id="io-trigger-btn" class="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold transition" title="Simulate the running process requesting I/O (Moves Running -> Waiting Queue -> Ready Queue)">
+              💿 Simulate I/O Request
+            </button>
+            <select id="speed-select" onchange="updateSpeed(this.value)" class="text-xs bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border rounded-lg px-2 py-1.5">
+              <option value="950">0.5x Slow</option>
+              <option value="600" selected>1x Normal</option>
+              <option value="300">2x Fast</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Active Transition Banner (Explains exact interaction happening at time t) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+          <div id="decision-banner" class="lg:col-span-8 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20 flex items-start gap-3 text-xs">
+            <div class="w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-base shrink-0 mt-0.5">
+              🧠
+            </div>
+            <div class="space-y-1 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-bold text-blue-600 dark:text-blue-400" id="decision-title">OS Stage Interaction at t = 0 ms</span>
+                <span id="active-transition-pills" class="flex flex-wrap gap-1"></span>
+              </div>
+              <p class="text-notion-lightText dark:text-notion-text leading-relaxed" id="decision-desc"></p>
+            </div>
+          </div>
+
+          <!-- Live Transition Legend / Mini State Counter -->
+          <div class="lg:col-span-4 p-3 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-notion-lightBorder dark:border-notion-border flex flex-col justify-between text-xs">
+            <div class="font-bold text-[11px] uppercase tracking-wider text-notion-lightMuted dark:text-notion-muted">
+              Active Stage Transitions at Current Clock Tick
+            </div>
+            <div id="transition-badges-box" class="flex flex-wrap gap-1.5 my-1.5"></div>
+            <div class="text-[11px] text-notion-lightMuted dark:text-notion-muted">
+              Watch the glowing arrows below to see how processes move between stages.
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- VISUAL 6-STAGE OS ARCHITECTURE & PROCESS INTERACTION PIPELINE     -->
+        <!-- ================================================================= -->
+        <div class="p-3 sm:p-4 rounded-xl bg-white dark:bg-[#161616] border border-notion-lightBorder dark:border-notion-border space-y-3">
+
+          <!-- Overhead Preemption / Time-Quantum Return Arc Indicator -->
+          <div id="preempt-arc-banner" class="hidden px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center justify-center gap-2">
+            <span>🔄 PREEMPTION / TIME-SLICE RETURN LOOP ACTIVE:</span>
+            <span id="preempt-arc-text" class="mono">Running Process interrupted → Returned to Ready Queue!</span>
+          </div>
+
+          <!-- Main 5-Column Horizontal Stage Pipeline -->
+          <div class="grid grid-cols-1 lg:grid-cols-11 gap-2 items-stretch">
+
+            <!-- STAGE 1: NOT ARRIVED YET (NEW / JOB POOL) -->
+            <div id="stage-box-future" class="lg:col-span-2 p-3 rounded-xl border-2 border-notion-lightBorder dark:border-notion-border bg-notion-lightCard/60 dark:bg-notion-card/60 flex flex-col justify-between transition-all">
+              <div>
+                <div class="flex items-center justify-between gap-1 mb-1">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">1. Not Arrived Yet</span>
+                  <span id="count-future" class="mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">0</span>
+                </div>
+                <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mb-2">
+                  Job Pool (<code class="mono">AT &gt; t</code>) waiting to enter RAM
+                </div>
+                <div id="pool-future" class="space-y-1.5 min-h-[90px]"></div>
+              </div>
+              <div class="pt-2 mt-2 border-t border-notion-lightBorder dark:border-notion-border text-[10px] text-notion-lightMuted dark:text-notion-muted flex items-center justify-between">
+                <span>Trigger: <code class="mono">Clock t == AT</code></span>
+                <span>→ Admit</span>
+              </div>
+            </div>
+
+            <!-- ARROW 1: ADMIT TO READY QUEUE -->
+            <div class="lg:col-span-1 flex flex-col items-center justify-center py-1">
+              <div id="arrow-admit-label" class="text-[10px] font-mono font-semibold text-notion-lightMuted dark:text-notion-muted mb-1 text-center">
+                Admit (AT=t)
+              </div>
+              <svg class="w-full h-8 max-w-[70px]" viewBox="0 0 80 28">
+                <line id="svg-line-admit" x1="4" y1="14" x2="66" y2="14" stroke="currentColor" stroke-width="2.5" class="text-neutral-400 dark:text-neutral-600" />
+                <polygon id="svg-head-admit" points="64,8 76,14 64,20" fill="currentColor" class="text-neutral-400 dark:text-neutral-600" />
+              </svg>
+              <div class="text-[9px] text-notion-lightMuted dark:text-notion-muted text-center">Long-Term</div>
+            </div>
+
+            <!-- STAGE 2: READY QUEUE (MAIN MEMORY) -->
+            <div id="stage-box-ready" class="lg:col-span-2 p-3 rounded-xl border-2 border-blue-500/40 bg-blue-500/[0.04] flex flex-col justify-between transition-all">
+              <div>
+                <div class="flex items-center justify-between gap-1 mb-1">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">2. Ready Queue (RAM)</span>
+                  <span id="count-ready" class="mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-400">0</span>
+                </div>
+                <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mb-2 flex items-center justify-between">
+                  <span>In Main Memory, waiting for CPU</span>
+                  <span class="mono font-semibold text-blue-500">Head → Tail</span>
+                </div>
+                <div id="pool-ready" class="space-y-1.5 min-h-[90px]"></div>
+              </div>
+              <div class="pt-2 mt-2 border-t border-blue-500/20 text-[10px] text-notion-lightMuted dark:text-notion-muted flex items-center justify-between">
+                <span>WT increments +1ms/tick</span>
+                <span>→ Scheduler</span>
+              </div>
+            </div>
+
+            <!-- STAGE 3 (ARROW + BOX): CPU SCHEDULER & DISPATCHER -->
+            <div class="lg:col-span-2 flex flex-col justify-between p-2.5 rounded-xl border-2 border-purple-500/30 bg-purple-500/[0.04]">
+              <div class="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 text-center">
+                3. Scheduler &amp; Dispatcher
+              </div>
+
+              <!-- CPU Scheduler Sub-card -->
+              <div class="p-2 rounded-lg bg-white/80 dark:bg-notion-card border border-purple-500/20 space-y-0.5 my-1">
+                <div class="flex items-center justify-between text-[10px] font-bold text-purple-600 dark:text-purple-400">
+                  <span>🧠 CPU Scheduler</span>
+                  <span id="sched-policy-pill" class="mono px-1 rounded bg-purple-500/15">SRTF</span>
+                </div>
+                <div id="sched-rule-text" class="text-[10px] text-notion-lightMuted dark:text-notion-muted leading-tight">
+                  Selects min Remaining Time
+                </div>
+              </div>
+
+              <!-- Directional Dispatch Arrow -->
+              <div class="flex items-center justify-center">
+                <svg class="w-full h-6 max-w-[90px]" viewBox="0 0 90 22">
+                  <line id="svg-line-dispatch" x1="4" y1="11" x2="76" y2="11" stroke="currentColor" stroke-width="2.5" class="text-purple-500" />
+                  <polygon points="74,6 86,11 74,16" fill="currentColor" class="text-purple-500" />
+                </svg>
+              </div>
+
+              <!-- Dispatcher Sub-card -->
+              <div id="dispatcher-card" class="p-2 rounded-lg bg-white/80 dark:bg-notion-card border border-purple-500/20 space-y-0.5">
+                <div class="flex items-center justify-between text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <span>🚀 Dispatcher</span>
+                  <span id="dispatcher-badge" class="mono text-[9px] px-1 rounded bg-emerald-500/15">User Mode</span>
+                </div>
+                <div id="dispatcher-detail" class="text-[10px] text-notion-lightMuted dark:text-notion-muted leading-tight">
+                  Context Switch • Load PC
+                </div>
+              </div>
+            </div>
+
+            <!-- STAGE 4: CPU CORE (RUNNING STATE) -->
+            <div id="stage-box-cpu" class="lg:col-span-2 p-3 rounded-xl border-2 border-emerald-500/50 bg-emerald-500/[0.05] flex flex-col justify-between transition-all">
+              <div>
+                <div class="flex items-center justify-between gap-1 mb-1">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">4. CPU Core (Running)</span>
+                  <span id="cpu-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                </div>
+                <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mb-2">
+                  Executing instructions on processor
+                </div>
+                <div id="pool-cpu" class="min-h-[90px] flex items-center justify-center"></div>
+              </div>
+              <div class="pt-2 mt-2 border-t border-emerald-500/20 text-[10px] text-notion-lightMuted dark:text-notion-muted flex items-center justify-between">
+                <span>Rem decreases −1ms/tick</span>
+                <span>→ Exit / Preempt</span>
+              </div>
+            </div>
+
+            <!-- STAGE 5: COMPLETED / TERMINATED -->
+            <div id="stage-box-done" class="lg:col-span-2 p-3 rounded-xl border-2 border-notion-lightBorder dark:border-notion-border bg-notion-lightCard/60 dark:bg-notion-card/60 flex flex-col justify-between transition-all">
+              <div>
+                <div class="flex items-center justify-between gap-1 mb-1">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-notion-lightText dark:text-notion-text">5. Completed</span>
+                  <span id="count-done" class="mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">0</span>
+                </div>
+                <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mb-2">
+                  Terminated (<code class="mono">Rem == 0</code>, PCB freed)
+                </div>
+                <div id="pool-done" class="space-y-1.5 min-h-[90px]"></div>
+              </div>
+              <div class="pt-2 mt-2 border-t border-notion-lightBorder dark:border-notion-border text-[10px] text-notion-lightMuted dark:text-notion-muted flex items-center justify-between">
+                <span>TAT = CT − AT</span>
+                <span>WT = TAT − BT</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- STAGE 6 (BOTTOM ROW): DEVICE / I/O WAITING QUEUE & LIVE KERNEL EVENT FEED -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 pt-2 border-t border-notion-lightBorder dark:border-notion-border">
+
+            <!-- Device / I/O Waiting Queue (Section 3B of Notes) -->
+            <div class="lg:col-span-5 p-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.03] flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    6. Device / I/O Waiting Queue (Section 3B)
+                  </span>
+                </div>
+                <span class="text-[10px] mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  Running → I/O Req → Waiting → Ready
+                </span>
+              </div>
+              <div id="pool-io" class="my-2 min-h-[42px] flex flex-wrap items-center gap-2">
+                <span class="text-xs text-notion-lightMuted dark:text-notion-muted italic">
+                  No process blocked on I/O. Click "💿 Simulate I/O Request" above while a process is on the CPU to watch it move here!
+                </span>
+              </div>
+            </div>
+
+            <!-- Live OS Kernel State-Transition Log -->
+            <div class="lg:col-span-7 p-3 rounded-xl border border-notion-lightBorder dark:border-notion-border bg-black/[0.02] dark:bg-white/[0.02]">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-notion-lightMuted dark:text-notion-muted">
+                  📜 Live OS State-Transition Log (Up to current clock t)
+                </span>
+                <span class="text-[10px] text-notion-lightMuted dark:text-notion-muted">Newest first</span>
+              </div>
+              <div id="kernel-log-feed" class="max-h-24 overflow-y-auto space-y-1 pr-1 text-xs mono"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- RECONSTRUCTED INTERACTIVE GANTT CHART                             -->
+        <!-- ================================================================= -->
+        <div class="space-y-2 pt-1">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-notion-lightMuted dark:text-notion-muted">
+                📊 Reconstructed Gantt Chart (Click any bar to jump clock to that time)
+              </h3>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="show-full-gantt" checked onchange="renderSimulationAtTime()" class="accent-blue-600 rounded" />
+                <span class="text-notion-lightMuted dark:text-notion-muted">Always show complete exam Gantt chart</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-xl bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border overflow-x-auto">
+            <div id="gantt-container" class="min-w-[520px] pb-2"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- SCHEDULING CRITERIA KPI CARDS + STEP-BY-STEP NUMERICAL TABLE        -->
+      <!-- =================================================================== -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Left 4 Cols: 6 Scheduling Criteria Cards -->
+        <div class="lg:col-span-4 grid grid-cols-2 gap-2.5 content-start">
+          <div class="p-3 rounded-xl bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border">
+            <div class="text-[11px] text-notion-lightMuted dark:text-notion-muted">Avg Turnaround (TAT)</div>
+            <div id="kpi-tat" class="mono text-xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">0.00 ms</div>
+            <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mt-0.5">Goal: Minimize (CT − AT)</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border">
+            <div class="text-[11px] text-notion-lightMuted dark:text-notion-muted">Avg Waiting Time (WT)</div>
+            <div id="kpi-wt" class="mono text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">0.00 ms</div>
+            <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mt-0.5">Goal: Minimize (TAT − BT)</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border">
+            <div class="text-[11px] text-notion-lightMuted dark:text-notion-muted">Avg Response Time (RT)</div>
+            <div id="kpi-rt" class="mono text-xl font-bold text-purple-600 dark:text-purple-400 mt-0.5">0.00 ms</div>
+            <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mt-0.5">First CPU Start − AT</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border">
+            <div class="text-[11px] text-notion-lightMuted dark:text-notion-muted">CPU Utilization</div>
+            <div id="kpi-util" class="mono text-xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">100%</div>
+            <div id="kpi-util-sub" class="text-[10px] text-notion-lightMuted dark:text-notion-muted mt-0.5">Busy / Total × 100</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border">
+            <div class="text-[11px] text-notion-lightMuted dark:text-notion-muted">Throughput</div>
+            <div id="kpi-throughput" class="mono text-base font-bold mt-0.5">0.19 proc/ms</div>
+            <div id="kpi-throughput-sub" class="text-[10px] text-notion-lightMuted dark:text-notion-muted mt-0.5">Processes / Total Time</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border">
+            <div class="text-[11px] text-notion-lightMuted dark:text-notion-muted">Context Switches</div>
+            <div id="kpi-switches" class="mono text-base font-bold text-rose-500 mt-0.5">0 switches</div>
+            <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted mt-0.5">Dispatcher overhead</div>
+          </div>
+        </div>
+
+        <!-- Right 8 Cols: Complete Exam Calculation Table -->
+        <div class="lg:col-span-8 bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 overflow-x-auto">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-notion-lightMuted dark:text-notion-muted">
+              🧮 Step-by-Step Numerical Solution Table (Matches Notion Notes)
+            </h3>
+            <div class="flex flex-wrap gap-2 text-[11px] mono">
+              <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-500">TAT = CT − AT</span>
+              <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500">WT = TAT − BT</span>
+              <span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-500">RT = 1st CPU − AT</span>
+            </div>
+          </div>
+
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-notion-lightBorder dark:border-notion-border text-[11px] text-notion-lightMuted dark:text-notion-muted">
+                <th class="py-2 px-2">Process</th>
+                <th class="py-2 px-2">AT</th>
+                <th class="py-2 px-2">BT</th>
+                <th class="py-2 px-2">Prio</th>
+                <th class="py-2 px-2">1st CPU</th>
+                <th class="py-2 px-2">Completion (CT)</th>
+                <th class="py-2 px-2">Turnaround (TAT = CT−AT)</th>
+                <th class="py-2 px-2">Waiting (WT = TAT−BT)</th>
+                <th class="py-2 px-2">Response (RT)</th>
+              </tr>
+            </thead>
+            <tbody id="metrics-table-body" class="mono divide-y divide-notion-lightBorder/60 dark:divide-notion-border/60"></tbody>
+            <tfoot id="metrics-table-foot" class="mono font-bold border-t-2 border-notion-lightBorder dark:border-notion-border bg-black/[0.02] dark:bg-white/[0.02]"></tfoot>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: SIDE-BY-SIDE ALL-ALGORITHM BENCHMARK                           -->
+    <!-- ===================================================================== -->
+    <section id="view-compare" class="hidden space-y-4">
+      <div class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-bold">⚖️ All 9 Scheduling Algorithms Compared on Current Processes</h2>
+            <p class="text-xs text-notion-lightMuted dark:text-notion-muted">
+              See how Non-Preemptive (FCFS, SJF, LJF, Priority NP, HRRN) and Preemptive (SRTF, LRJF, Priority P, Round Robin) compare on the exact same process table.
+            </p>
+          </div>
+          <button onclick="switchTab('simulator')" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-600 text-white">
+            ← Back to Stage &amp; Gantt Lab
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-notion-lightBorder dark:border-notion-border text-[11px] text-notion-lightMuted dark:text-notion-muted">
+                <th class="py-2.5 px-3">Algorithm</th>
+                <th class="py-2.5 px-3">Type</th>
+                <th class="py-2.5 px-3">Avg TAT (ms)</th>
+                <th class="py-2.5 px-3">Avg WT (ms)</th>
+                <th class="py-2.5 px-3">Avg RT (ms)</th>
+                <th class="py-2.5 px-3">Context Switches</th>
+                <th class="py-2.5 px-3">Mini Gantt Timeline</th>
+                <th class="py-2.5 px-3">Action</th>
+              </tr>
+            </thead>
+            <tbody id="compare-table-body" class="divide-y divide-notion-lightBorder dark:divide-notion-border"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: INTERACTIVE NOTES, QUEUE DIAGRAMS & AGING SANDBOX              -->
+    <!-- ===================================================================== -->
+    <section id="view-concepts" class="hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <!-- Interactive Simulator 1: Preemptive vs Non-Preemptive I/O & Priority Interrupt -->
+        <div class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Section 1 &amp; 3 • Interactive Visual</span>
+            <span class="text-[11px] px-2 py-0.5 rounded bg-black/5 dark:bg-white/5">Preemptive vs. Non-Preemptive</span>
+          </div>
+          <h3 class="text-sm font-bold">How P1 and P2 Interact During I/O Requests &amp; Interrupts</h3>
+          <p class="text-xs text-notion-lightMuted dark:text-notion-muted leading-relaxed">
+            Click each mode below to compare how your Notion notes define <strong>Preemptive</strong> vs. <strong>Non-Preemptive</strong> CPU behavior when P1 goes for I/O or a higher-priority process arrives:
+          </p>
+
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button onclick="setConceptDemo('io_p')" id="cd-io_p" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white">
+              ⚡ Preemptive (P2 Gets CPU Immediately)
+            </button>
+            <button onclick="setConceptDemo('io_np')" id="cd-io_np" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-notion-lightBorder dark:border-notion-border">
+              🔒 Non-Preemptive (CPU Waits / No Interrupt)
+            </button>
+          </div>
+
+          <div id="concept-demo-box" class="p-3.5 rounded-xl bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border space-y-2.5 text-xs"></div>
+        </div>
+
+        <!-- Interactive Simulator 2: Starvation & Aging Visualizer -->
+        <div class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Section 8.2 &amp; 8.3 • Starvation Fix</span>
+            <span class="text-[11px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-400">Aging Technique</span>
+          </div>
+          <h3 class="text-sm font-bold">How "Aging" Saves Low-Priority Processes from Starvation</h3>
+          <p class="text-xs text-notion-lightMuted dark:text-notion-muted leading-relaxed">
+            In SJF and Priority Scheduling, a low-priority process (<code class="mono">P_Low</code>, Priority 10) can starve forever if Priority 1–3 jobs keep arriving. Click <strong>+ Age Process</strong> to see how the OS gradually bumps its priority as waiting time increases:
+          </p>
+
+          <div class="p-3.5 rounded-xl bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border space-y-3">
+            <div class="flex items-center justify-between text-xs">
+              <span>Time Spent Waiting in Ready Queue: <strong id="aging-wait" class="mono text-blue-500">0 ms</strong></span>
+              <span>P_Low Priority Number: <strong id="aging-prio" class="mono text-amber-500">10 (Lowest)</strong></span>
+            </div>
+            <div class="w-full h-3 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+              <div id="aging-bar" class="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300" style="width: 10%"></div>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <span id="aging-status" class="text-xs text-notion-lightMuted dark:text-notion-muted">
+                ⏳ Waiting behind higher-priority processes...
+              </span>
+              <div class="flex gap-1.5 shrink-0">
+                <button onclick="stepAging()" class="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold">
+                  + Age (+2 Wait Cycles)
+                </button>
+                <button onclick="resetAging()" class="px-2 py-1 rounded border border-notion-lightBorder dark:border-notion-border text-xs">
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Complete Comparison Tables from Notes (Sections 1, 5, 6, 7, 9) -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 space-y-3">
+          <h3 class="text-sm font-bold">Sections 5 &amp; 6 — CPU Scheduler vs. Dispatcher</h3>
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-notion-lightBorder dark:border-notion-border text-notion-lightMuted dark:text-notion-muted">
+                <th class="py-2 pr-2">Aspect</th>
+                <th class="py-2 px-2 text-blue-500">CPU Scheduler (Short-Term)</th>
+                <th class="py-2 pl-2 text-emerald-500">Dispatcher</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-notion-lightBorder/60 dark:divide-notion-border/60">
+              <tr>
+                <td class="py-2 pr-2 font-semibold">Definition</td>
+                <td class="py-2 px-2">Selects which ready process gets the CPU next</td>
+                <td class="py-2 pl-2">Gives actual CPU control to the selected process</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-2 font-semibold">Core Task</td>
+                <td class="py-2 px-2">Makes the scheduling decision using an algorithm</td>
+                <td class="py-2 pl-2">1. Context Switching<br>2. Switching to User Mode<br>3. Jumping to proper program location</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-4 space-y-3">
+          <h3 class="text-sm font-bold">Section 9 &amp; 11 — Master Comparison of Scheduling Algorithms</h3>
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-notion-lightBorder dark:border-notion-border text-notion-lightMuted dark:text-notion-muted">
+                <th class="py-2">Algorithm</th>
+                <th class="py-2">Type</th>
+                <th class="py-2">Selection Basis</th>
+                <th class="py-2">Main Advantage</th>
+                <th class="py-2">Major Problem</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-notion-lightBorder/60 dark:divide-notion-border/60">
+              <tr>
+                <td class="py-2 font-bold">FCFS</td>
+                <td class="py-2">Non-Preemptive</td>
+                <td class="py-2">Arrival Time (FIFO)</td>
+                <td class="py-2 text-emerald-500">Simple, no starvation</td>
+                <td class="py-2 text-rose-400">Convoy Effect</td>
+              </tr>
+              <tr>
+                <td class="py-2 font-bold">SJF / SRTF</td>
+                <td class="py-2">NP / Preemptive</td>
+                <td class="py-2">Shortest Burst / Rem</td>
+                <td class="py-2 text-emerald-500">Minimum Avg Waiting Time</td>
+                <td class="py-2 text-rose-400">Starvation of long jobs</td>
+              </tr>
+              <tr>
+                <td class="py-2 font-bold">LJF / LRJF</td>
+                <td class="py-2">NP / Preemptive</td>
+                <td class="py-2">Longest Burst / Rem</td>
+                <td class="py-2 text-emerald-500">Long batch tasks prioritized</td>
+                <td class="py-2 text-rose-400">Convoy effect &amp; large TAT</td>
+              </tr>
+              <tr>
+                <td class="py-2 font-bold">Priority</td>
+                <td class="py-2">NP / Preemptive</td>
+                <td class="py-2">Priority Integer</td>
+                <td class="py-2 text-emerald-500">Important tasks run first</td>
+                <td class="py-2 text-rose-400">Starvation (Fixed by Aging)</td>
+              </tr>
+              <tr>
+                <td class="py-2 font-bold">Round Robin</td>
+                <td class="py-2">Preemptive</td>
+                <td class="py-2">Time Quantum (TQ)</td>
+                <td class="py-2 text-emerald-500">Fairness &amp; fast Response</td>
+                <td class="py-2 text-rose-400">Context-switch overhead</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: EXAM DRILL & QUIZ                                              -->
+    <!-- ===================================================================== -->
+    <section id="view-quiz" class="hidden space-y-4">
+      <div class="bg-notion-lightCard dark:bg-notion-card border border-notion-lightBorder dark:border-notion-border rounded-xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">MCA &amp; Competitive Exam Practice</span>
+            <h2 class="text-base font-bold mt-0.5">🎯 CPU Scheduling Numerical &amp; Concept Drill</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="quiz-score-badge" class="mono text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+              Score: 0 / 6
+            </span>
+            <button onclick="resetQuiz()" class="text-xs px-3 py-1 rounded-lg border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5">
+              ↺ Reset Quiz
+            </button>
+          </div>
+        </div>
+        <div id="quiz-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- JAVASCRIPT ENGINE                                                       -->
+  <!-- ======================================================================= -->
+  <script>
+    const PALETTE = [
+      { bg: 'bg-blue-600', light: 'bg-blue-500/15', border: 'border-blue-500', text: 'text-blue-500' },
+      { bg: 'bg-emerald-600', light: 'bg-emerald-500/15', border: 'border-emerald-500', text: 'text-emerald-500' },
+      { bg: 'bg-amber-500', light: 'bg-amber-500/15', border: 'border-amber-500', text: 'text-amber-500' },
+      { bg: 'bg-purple-600', light: 'bg-purple-500/15', border: 'border-purple-500', text: 'text-purple-500' },
+      { bg: 'bg-rose-600', light: 'bg-rose-500/15', border: 'border-rose-500', text: 'text-rose-500' },
+      { bg: 'bg-cyan-600', light: 'bg-cyan-500/15', border: 'border-cyan-500', text: 'text-cyan-500' },
+      { bg: 'bg-indigo-600', light: 'bg-indigo-500/15', border: 'border-indigo-500', text: 'text-indigo-500' }
+    ];
+
+    // All 14 Presets from the User's Notion Notes
+    const PRESETS = {
+      srtf_s2: {
+        algo: 'SRTF', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 6, prio: 1 },
+          { id: 'P2', at: 1, bt: 3, prio: 2 },
+          { id: 'P3', at: 2, bt: 7, prio: 3 }
+        ]
+      },
+      fcfs_s2: {
+        algo: 'FCFS', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 2, bt: 5, prio: 1 },
+          { id: 'P2', at: 0, bt: 3, prio: 2 },
+          { id: 'P3', at: 4, bt: 4, prio: 3 }
+        ]
+      },
+      fcfs_ex3: {
+        algo: 'FCFS', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 10, prio: 1 },
+          { id: 'P2', at: 3, bt: 5, prio: 2 },
+          { id: 'P3', at: 5, bt: 2, prio: 3 },
+          { id: 'P4', at: 6, bt: 6, prio: 4 },
+          { id: 'P5', at: 8, bt: 4, prio: 5 }
+        ]
+      },
+      fcfs_s1: {
+        algo: 'FCFS', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 5, prio: 1 },
+          { id: 'P2', at: 0, bt: 3, prio: 2 },
+          { id: 'P3', at: 0, bt: 8, prio: 3 }
+        ]
+      },
+      sjf_ex1: {
+        algo: 'SJF', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 6, prio: 1 },
+          { id: 'P2', at: 2, bt: 8, prio: 2 },
+          { id: 'P3', at: 4, bt: 3, prio: 3 }
+        ]
+      },
+      sjf_s1: {
+        algo: 'SRTF', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 6, prio: 1 },
+          { id: 'P2', at: 0, bt: 8, prio: 2 },
+          { id: 'P3', at: 0, bt: 5, prio: 3 }
+        ]
+      },
+      ljf_ex: {
+        algo: 'LJF', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 3, prio: 1 },
+          { id: 'P2', at: 1, bt: 2, prio: 2 },
+          { id: 'P3', at: 2, bt: 4, prio: 3 },
+          { id: 'P4', at: 3, bt: 5, prio: 4 },
+          { id: 'P5', at: 4, bt: 6, prio: 5 }
+        ]
+      },
+      lrjf_ex: {
+        algo: 'LRTF', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 3, prio: 1 },
+          { id: 'P2', at: 1, bt: 2, prio: 2 },
+          { id: 'P3', at: 2, bt: 4, prio: 3 },
+          { id: 'P4', at: 3, bt: 5, prio: 4 },
+          { id: 'P5', at: 4, bt: 6, prio: 5 }
+        ]
+      },
+      prio_np: {
+        algo: 'PRIO_NP', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 4, prio: 2 },
+          { id: 'P2', at: 1, bt: 2, prio: 1 },
+          { id: 'P3', at: 2, bt: 6, prio: 3 }
+        ]
+      },
+      prio_p_diff: {
+        algo: 'PRIO_P', tq: 2, prioRule: 'higher',
+        processes: [
+          { id: 'P1', at: 0, bt: 6, prio: 2 },
+          { id: 'P2', at: 1, bt: 4, prio: 3 },
+          { id: 'P3', at: 2, bt: 5, prio: 1 }
+        ]
+      },
+      prio_p_same: {
+        algo: 'PRIO_P', tq: 2, prioRule: 'higher',
+        processes: [
+          { id: 'P1', at: 0, bt: 7, prio: 2 },
+          { id: 'P2', at: 0, bt: 4, prio: 1 },
+          { id: 'P3', at: 0, bt: 6, prio: 3 }
+        ]
+      },
+      rr_ex0: {
+        algo: 'RR', tq: 3, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 5, prio: 1 },
+          { id: 'P2', at: 1, bt: 7, prio: 2 },
+          { id: 'P3', at: 3, bt: 4, prio: 3 },
+          { id: 'P4', at: 5, bt: 6, prio: 4 }
+        ]
+      },
+      rr_s2: {
+        algo: 'RR', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 5, prio: 1 },
+          { id: 'P2', at: 4, bt: 2, prio: 2 },
+          { id: 'P3', at: 5, bt: 4, prio: 3 }
+        ]
+      },
+      rr_s1: {
+        algo: 'RR', tq: 2, prioRule: 'lower',
+        processes: [
+          { id: 'P1', at: 0, bt: 4, prio: 1 },
+          { id: 'P2', at: 0, bt: 5, prio: 2 },
+          { id: 'P3', at: 0, bt: 3, prio: 3 }
+        ]
+      }
+    };
+
+    const ALGO_INFO = {
+      FCFS: {
+        name: 'First Come First Served (FCFS)',
+        shortRule: 'Pick earliest Arrival Time (FIFO)',
+        preemptive: false,
+        desc: 'Non-preemptive FIFO queue. Processes execute strictly in Arrival Time order. Simple, but long jobs cause the Convoy Effect.'
+      },
+      SJF: {
+        name: 'Shortest Job First (SJF)',
+        shortRule: 'Pick min Burst Time (Non-Preemptive)',
+        preemptive: false,
+        desc: 'Greedy non-preemptive policy: selects waiting process with smallest Burst Time. Optimal minimum average Waiting Time.'
+      },
+      SRTF: {
+        name: 'Shortest Remaining Time First (SRTF / SRJF)',
+        shortRule: 'Preempt if new Rem < current Rem',
+        preemptive: true,
+        desc: 'Preemptive SJF: if a newly arrived process has a shorter remaining time than the running process, the CPU preempts immediately.'
+      },
+      LJF: {
+        name: 'Longest Job First (LJF)',
+        shortRule: 'Pick max Burst Time (Non-Preemptive)',
+        preemptive: false,
+        desc: 'Non-preemptive policy that assigns CPU to the process with the largest Burst Time (ties broken by FCFS).'
+      },
+      LRTF: {
+        name: 'Longest Remaining Job First (LRJF / LRTF)',
+        shortRule: 'Preempt for max Remaining Time',
+        preemptive: true,
+        desc: 'Preemptive version of LJF: checks remaining burst times every 1 ms and runs the process with the largest remaining burst time.'
+      },
+      PRIO_NP: {
+        name: 'Priority Scheduling (Non-Preemptive)',
+        shortRule: 'Pick best Priority (runs to completion)',
+        preemptive: false,
+        desc: 'Selects highest-priority process in Ready Queue and runs it until completion without interruption.'
+      },
+      PRIO_P: {
+        name: 'Priority Scheduling (Preemptive)',
+        shortRule: 'Preempt immediately for higher Priority',
+        preemptive: true,
+        desc: 'Immediately interrupts the running process if a higher-priority process arrives in the Ready Queue.'
+      },
+      RR: {
+        name: 'Round Robin (RR)',
+        shortRule: 'Circular FIFO with Time Quantum (TQ)',
+        preemptive: true,
+        desc: 'Preemptive time-sharing: each ready process gets a fixed Time Quantum (TQ). If not finished, it loops back to the tail of the Ready Queue.'
+      },
+      HRRN: {
+        name: 'Highest Response Ratio Next (HRRN)',
+        shortRule: 'Pick max (WT + BT) / BT',
+        preemptive: false,
+        desc: 'Non-preemptive policy selecting highest Response Ratio = (WT + BT) / BT. Prevents starvation via built-in aging.'
+      }
+    };
+
+    let state = {
+      currentPreset: 'srtf_s2',
+      algo: 'SRTF',
+      tq: 2,
+      prioRule: 'lower',
+      processes: JSON.parse(JSON.stringify(PRESETS.srtf_s2.processes)),
+      simResult: null,
+      currentTime: 0, // Starts at t = 0 so user immediately sees Not Arrived Yet & Ready Queue!
+      playInterval: null,
+      playSpeed: 600,
+      ioDemoProcess: null
+    };
+
+    // =========================================================================
+    // CORE SCHEDULING ENGINE WITH STAGE-INTERACTION TRACKING
+    // =========================================================================
+    function simulateScheduling(procList, algo, tq, prioRule) {
+      const procs = procList.map((p, idx) => ({
+        id: p.id,
+        idx,
+        at: Math.max(0, Number(p.at) || 0),
+        bt: Math.max(1, Number(p.bt) || 1),
+        prio: Number(p.prio) || 1,
+        rem: Math.max(1, Number(p.bt) || 1),
+        wtSoFar: 0,
+        firstStart: null,
+        ct: 0,
+        tat: 0,
+        wt: 0,
+        rt: 0,
+        color: PALETTE[idx % PALETTE.length]
+      }));
+
+      const n = procs.length;
+      if (n === 0) {
+        return { gantt: [], snapshots: [], preSnapshot: null, procs: [], totalTime: 0, busyTime: 0, contextSwitches: 0, logs: [] };
+      }
+
+      // Pre-Start Snapshot (t = -1: All processes in Job Pool / Not Arrived Yet)
+      const preSnapshot = {
+        t: -1,
+        running: null,
+        readyIds: [],
+        reason: 'Pre-Arrival Job Pool (Before t = 0 ms): All processes are in the Job Pool waiting for their Arrival Time (AT) to enter the Ready Queue.',
+        switched: false,
+        admittedIds: [],
+        preemptedId: null,
+        completedId: null,
+        procStates: procs.map(p => ({
+          id: p.id, at: p.at, bt: p.bt, prio: p.prio, rem: p.bt, wtSoFar: 0, color: p.color,
+          status: 'future'
+        }))
+      };
+
+      let t = 0;
+      let completed = 0;
+      const gantt = [];
+      const snapshots = [];
+      const logs = [];
+
+      const isHigherPrio = (a, b) => {
+        if (a.prio !== b.prio) return prioRule === 'lower' ? a.prio < b.prio : a.prio > b.prio;
+        if (a.at !== b.at) return a.at < b.at;
+        return a.idx < b.idx;
+      };
+
+      let currentProc = null;
+      let currentSliceUsed = 0;
+      let rrQueue = [];
+      const arrivedSet = new Set();
+      let justCompletedId = null;
+
+      const maxTime = procs.reduce((acc, p) => acc + p.bt, 0) + Math.max(...procs.map(p => p.at)) + 50;
+
+      while (completed < n && t < maxTime) {
+        const admittedIds = [];
+        let preemptedId = null;
+
+        // 1. Check arrivals at time t
+        const newlyArrived = procs
+          .filter(p => p.at <= t && p.rem > 0 && !arrivedSet.has(p.idx))
+          .sort((a, b) => a.at - b.at || a.idx - b.idx);
+
+        newlyArrived.forEach(p => {
+          arrivedSet.add(p.idx);
+          admittedIds.push(p.id);
+          logs.push({ t, type: 'ADMIT', text: `[t=${t}ms] ADMIT: ${p.id} arrived (AT=${p.at}ms, BT=${p.bt}ms) → Entered Ready Queue` });
+          if (algo === 'RR') rrQueue.push(p.idx);
+        });
+
+        let reason = '';
+
+        // 2. Round Robin Time Quantum expiration check
+        if (algo === 'RR' && currentProc !== null) {
+          if (currentSliceUsed >= tq) {
+            preemptedId = currentProc.id;
+            rrQueue.push(currentProc.idx);
+            logs.push({ t, type: 'PREEMPT', text: `[t=${t}ms] TQ EXPIRED: ${currentProc.id} used ${tq}ms slice → Moved back to Ready Queue tail` });
+            reason = `${currentProc.id} exhausted Time Quantum (${tq}ms) and looped back to Ready Queue. `;
+            currentProc = null;
+            currentSliceUsed = 0;
+          }
+        }
+
+        // 3. Available processes in Ready Queue
+        const available = procs.filter(p => p.at <= t && p.rem > 0);
+
+        if (available.length === 0) {
+          currentProc = null;
+          currentSliceUsed = 0;
+          recordGanttTick(gantt, 'IDLE', null, t, t + 1);
+          snapshots.push({
+            t,
+            running: null,
+            readyIds: [],
+            reason: `CPU is IDLE at t = ${t} ms because all remaining processes are still in "Not Arrived Yet" (AT > ${t} ms).`,
+            switched: false,
+            admittedIds,
+            preemptedId: null,
+            completedId: justCompletedId,
+            procStates: procs.map(p => ({
+              id: p.id, at: p.at, bt: p.bt, prio: p.prio, rem: p.rem, wtSoFar: p.wtSoFar, color: p.color,
+              status: p.rem === 0 ? 'done' : 'future'
+            }))
+          });
+          justCompletedId = null;
+          t++;
+          continue;
+        }
+
+        const prevRunningId = currentProc ? currentProc.id : null;
+
+        // 4. Algorithm Selection Logic
+        if (algo === 'RR') {
+          if (currentProc === null && rrQueue.length > 0) {
+            const nextIdx = rrQueue.shift();
+            currentProc = procs[nextIdx];
+            currentSliceUsed = 0;
+            reason += `Round Robin dispatched ${currentProc.id} from Ready Queue head (Slice 1/${tq}ms).`;
+          } else if (currentProc !== null) {
+            reason = `${currentProc.id} continues its Round Robin time slice (${currentSliceUsed + 1}/${tq}ms).`;
+          }
+        } else if (['FCFS', 'SJF', 'LJF', 'PRIO_NP', 'HRRN'].includes(algo)) {
+          if (currentProc !== null && currentProc.rem > 0) {
+            reason = `Non-Preemptive lock: ${currentProc.id} holds the CPU until completion (${currentProc.rem}ms remaining).`;
+          } else {
+            if (algo === 'FCFS') {
+              available.sort((a, b) => a.at - b.at || a.idx - b.idx);
+              currentProc = available[0];
+              reason = `FCFS selected ${currentProc.id} (earliest Arrival Time AT = ${currentProc.at}ms).`;
+            } else if (algo === 'SJF') {
+              available.sort((a, b) => a.bt - b.bt || a.at - b.at || a.idx - b.idx);
+              currentProc = available[0];
+              reason = `SJF selected ${currentProc.id} with shortest Burst Time (BT = ${currentProc.bt}ms) from Ready Queue.`;
+            } else if (algo === 'LJF') {
+              available.sort((a, b) => b.bt - a.bt || a.at - b.at || a.idx - b.idx);
+              currentProc = available[0];
+              reason = `LJF selected ${currentProc.id} with longest Burst Time (BT = ${currentProc.bt}ms) from Ready Queue.`;
+            } else if (algo === 'PRIO_NP') {
+              available.sort((a, b) => (isHigherPrio(a, b) ? -1 : 1));
+              currentProc = available[0];
+              reason = `Priority (NP) selected ${currentProc.id} (Priority ${currentProc.prio}) from Ready Queue.`;
+            } else if (algo === 'HRRN') {
+              available.sort((a, b) => {
+                const rrA = ((t - a.at) + a.bt) / a.bt;
+                const rrB = ((t - b.at) + b.bt) / b.bt;
+                if (Math.abs(rrB - rrA) > 1e-6) return rrB - rrA;
+                return a.at - b.at || a.idx - b.idx;
+              });
+              currentProc = available[0];
+              const ratio = (((t - currentProc.at) + currentProc.bt) / currentProc.bt).toFixed(2);
+              reason = `HRRN selected ${currentProc.id} with highest Response Ratio = ${ratio}.`;
+            }
+          }
+        } else if (['SRTF', 'LRTF', 'PRIO_P'].includes(algo)) {
+          if (algo === 'SRTF') {
+            available.sort((a, b) => a.rem - b.rem || a.at - b.at || a.idx - b.idx);
+            const best = available[0];
+            if (currentProc && currentProc.idx !== best.idx) {
+              preemptedId = currentProc.id;
+              reason = `⚡ PREEMPTION! Newly arrived/ready ${best.id} (rem=${best.rem}ms) is shorter than running ${currentProc.id} (rem=${currentProc.rem}ms). ${currentProc.id} returns to Ready Queue!`;
+              logs.push({ t, type: 'PREEMPT', text: `[t=${t}ms] PREEMPT: ${best.id} (rem=${best.rem}ms) preempted ${currentProc.id} (rem=${currentProc.rem}ms) → ${currentProc.id} back to Ready Queue` });
+            } else {
+              reason = `SRTF executes ${best.id} (shortest remaining time = ${best.rem}ms).`;
+            }
+            currentProc = best;
+          } else if (algo === 'LRTF') {
+            available.sort((a, b) => b.rem - a.rem || a.at - b.at || a.idx - b.idx);
+            const best = available[0];
+            if (currentProc && currentProc.idx !== best.idx) {
+              preemptedId = currentProc.id;
+              reason = `⚡ PREEMPTION! ${best.id} (rem=${best.rem}ms) has longer remaining time than ${currentProc.id} (rem=${currentProc.rem}ms).`;
+              logs.push({ t, type: 'PREEMPT', text: `[t=${t}ms] PREEMPT: ${best.id} (rem=${best.rem}ms) preempted ${currentProc.id} (rem=${currentProc.rem}ms)` });
+            } else {
+              reason = `LRJF executes ${best.id} (longest remaining time = ${best.rem}ms).`;
+            }
+            currentProc = best;
+          } else if (algo === 'PRIO_P') {
+            available.sort((a, b) => (isHigherPrio(a, b) ? -1 : 1));
+            const best = available[0];
+            if (currentProc && currentProc.idx !== best.idx) {
+              preemptedId = currentProc.id;
+              reason = `⚡ PREEMPTION! ${best.id} (Priority ${best.prio}) preempted running ${currentProc.id} (Priority ${currentProc.prio}).`;
+              logs.push({ t, type: 'PREEMPT', text: `[t=${t}ms] PREEMPT: ${best.id} (Prio ${best.prio}) interrupted ${currentProc.id} (Prio ${currentProc.prio})` });
+            } else {
+              reason = `Preemptive Priority executes ${best.id} (Priority ${best.prio}).`;
+            }
+            currentProc = best;
+          }
+        }
+
+        if (currentProc.firstStart === null) {
+          currentProc.firstStart = t;
+        }
+
+        let readyQueueOrder = [];
+        if (algo === 'RR') {
+          readyQueueOrder = rrQueue.map(idx => procs[idx].id);
+        } else {
+          readyQueueOrder = available.filter(p => p.idx !== currentProc.idx).map(p => p.id);
+        }
+
+        const switched = (prevRunningId !== null && prevRunningId !== currentProc.id) || (prevRunningId === null && t > 0);
+        if (prevRunningId !== currentProc.id) {
+          logs.push({ t, type: 'DISPATCH', text: `[t=${t}ms] DISPATCH: Dispatcher switched CPU context to ${currentProc.id} (Rem=${currentProc.rem}ms)` });
+        }
+
+        // Save snapshot for clock tick t
+        snapshots.push({
+          t,
+          running: { id: currentProc.id, rem: currentProc.rem, bt: currentProc.bt, prio: currentProc.prio, sliceUsed: currentSliceUsed + 1 },
+          readyIds: [...readyQueueOrder],
+          reason,
+          switched,
+          admittedIds,
+          preemptedId,
+          completedId: justCompletedId,
+          procStates: procs.map(p => ({
+            id: p.id, at: p.at, bt: p.bt, prio: p.prio, rem: p.rem, wtSoFar: p.wtSoFar, color: p.color,
+            status: p.rem === 0 ? 'done' : (p.at > t ? 'future' : (currentProc.id === p.id ? 'running' : 'ready'))
+          }))
+        });
+
+        justCompletedId = null;
+
+        // Increment waiting time for processes sitting in Ready Queue
+        available.forEach(p => {
+          if (p.idx !== currentProc.idx) p.wtSoFar += 1;
+        });
+
+        // Advance 1 ms
+        recordGanttTick(gantt, currentProc.id, currentProc.color, t, t + 1);
+        currentProc.rem -= 1;
+        currentSliceUsed += 1;
+        t += 1;
+
+        if (currentProc.rem === 0) {
+          currentProc.ct = t;
+          currentProc.tat = currentProc.ct - currentProc.at;
+          currentProc.wt = currentProc.tat - currentProc.bt;
+          currentProc.rt = currentProc.firstStart - currentProc.at;
+          completed += 1;
+          justCompletedId = currentProc.id;
+          logs.push({ t, type: 'DONE', text: `[t=${t}ms] TERMINATE: ${currentProc.id} completed execution (CT=${t}ms, TAT=${currentProc.tat}ms, WT=${currentProc.wt}ms)` });
+          currentProc = null;
+          currentSliceUsed = 0;
+        }
+      }
+
+      // Final completion snapshot at t = totalTime
+      snapshots.push({
+        t,
+        running: null,
+        readyIds: [],
+        reason: `🎉 All ${n} processes have completed execution at t = ${t} ms! Use the slider or ⏮ t=0 button to replay stage interactions.`,
+        switched: false,
+        admittedIds: [],
+        preemptedId: null,
+        completedId: justCompletedId,
+        procStates: procs.map(p => ({
+          id: p.id, at: p.at, bt: p.bt, prio: p.prio, rem: 0, wtSoFar: p.wt, color: p.color,
+          status: 'done'
+        }))
+      });
+
+      const totalTime = t;
+      const busyTime = gantt.filter(g => g.id !== 'IDLE').reduce((acc, g) => acc + (g.end - g.start), 0);
+      let contextSwitches = 0;
+      for (let i = 1; i < gantt.length; i++) {
+        if (gantt[i].id !== gantt[i - 1].id && gantt[i].id !== 'IDLE') contextSwitches++;
+      }
+
+      return { gantt, snapshots, preSnapshot, procs, totalTime, busyTime, contextSwitches, logs };
+    }
+
+    function recordGanttTick(gantt, id, color, start, end) {
+      if (gantt.length > 0 && gantt[gantt.length - 1].id === id) {
+        gantt[gantt.length - 1].end = end;
+      } else {
+        gantt.push({ id, color, start, end });
+      }
+    }
+
+    // =========================================================================
+    // RENDERING & STAGE INTERACTION UI
+    // =========================================================================
+    function recomputeAndRender(resetClockToZero = true) {
+      // Highlight active algorithm button
+      document.querySelectorAll('.algo-btn').forEach(btn => {
+        btn.className = 'algo-btn px-2.5 py-1 rounded text-xs font-medium transition-all border border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5';
+      });
+      const activeBtn = document.getElementById(`algo-${state.algo}`);
+      if (activeBtn) {
+        activeBtn.className = 'algo-btn px-2.5 py-1 rounded text-xs font-semibold transition-all bg-blue-600 text-white shadow-sm';
+      }
+
+      const info = ALGO_INFO[state.algo];
+      const badge = document.getElementById('algo-type-badge');
+      if (info.preemptive) {
+        badge.textContent = '⚡ Preemptive Scheduling';
+        badge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30';
+      } else {
+        badge.textContent = '🔒 Non-Preemptive Scheduling';
+        badge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30';
+      }
+      document.getElementById('algo-summary-line').innerHTML = `<strong>${info.name}:</strong> ${info.desc}`;
+      document.getElementById('sched-policy-pill').textContent = state.algo;
+      document.getElementById('sched-rule-text').textContent = info.shortRule;
+
+      document.getElementById('param-rr').classList.toggle('hidden', state.algo !== 'RR');
+      document.getElementById('param-prio').classList.toggle('hidden', state.algo !== 'PRIO_NP' && state.algo !== 'PRIO_P');
+
+      state.simResult = simulateScheduling(state.processes, state.algo, state.tq, state.prioRule);
+
+      const scrubber = document.getElementById('time-scrubber');
+      scrubber.min = -1;
+      scrubber.max = state.simResult.totalTime;
+
+      // Key fix: Start at t = 0 (not totalTime) so user sees Not Arrived Yet & Ready Queue immediately!
+      if (resetClockToZero || state.currentTime > state.simResult.totalTime) {
+        state.currentTime = 0;
+      }
+      scrubber.value = state.currentTime;
+
+      renderProcessEditor();
+      renderSimulationAtTime();
+      renderMetricsTable();
+      renderComparisonTable();
+    }
+
+    function renderProcessEditor() {
+      const tbody = document.getElementById('process-editor-body');
+      let totalBt = 0;
+      tbody.innerHTML = state.processes.map((p, idx) => {
+        totalBt += Number(p.bt) || 0;
+        const c = PALETTE[idx % PALETTE.length];
+        return `
+          <tr>
+            <td class="py-1.5 font-bold flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full ${c.bg}"></span>
+              <span>${p.id}</span>
+            </td>
+            <td class="py-1.5">
+              <input type="number" min="0" max="50" value="${p.at}"
+                onchange="updateProcessField(${idx}, 'at', this.value)"
+                class="w-14 px-1.5 py-0.5 rounded bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border text-xs" />
+            </td>
+            <td class="py-1.5">
+              <input type="number" min="1" max="50" value="${p.bt}"
+                onchange="updateProcessField(${idx}, 'bt', this.value)"
+                class="w-14 px-1.5 py-0.5 rounded bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border text-xs" />
+            </td>
+            <td class="py-1.5">
+              <input type="number" min="1" max="20" value="${p.prio}"
+                onchange="updateProcessField(${idx}, 'prio', this.value)"
+                class="w-14 px-1.5 py-0.5 rounded bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border text-xs" />
+            </td>
+            <td class="py-1.5 text-right">
+              <button onclick="removeProcess(${idx})" class="text-rose-500 hover:text-rose-400 px-1" title="Remove Process">✕</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      document.getElementById('total-burst-badge').textContent = `Total BT: ${totalBt} ms`;
+    }
+
+    function renderSimulationAtTime() {
+      const sim = state.simResult;
+      if (!sim) return;
+
+      const t = state.currentTime;
+      const snap = t < 0 ? sim.preSnapshot : (sim.snapshots[Math.min(t, sim.totalTime)] || sim.snapshots[sim.snapshots.length - 1]);
+      if (!snap) return;
+
+      // 1. Update Clock Readout
+      const clockEl = document.getElementById('clock-readout');
+      clockEl.textContent = t < 0 ? 'Pre-Start (Job Pool)' : `t = ${t} ms`;
+      document.getElementById('time-scrubber').value = t;
+
+      // 2. Decision Banner & Active Transition Pills
+      document.getElementById('decision-title').textContent =
+        t < 0
+          ? '🗂️ Pre-Start Job Pool (Before t = 0 ms)'
+          : (t === sim.totalTime ? `✅ All Processes Completed (t = ${t} ms)` : `🧠 Stage Interaction at Clock t = ${t} → ${t + 1} ms`);
+      document.getElementById('decision-desc').textContent = snap.reason;
+
+      // Build active transition badges
+      const badges = [];
+      if (snap.admittedIds && snap.admittedIds.length > 0) {
+        badges.push(`<span class="px-2 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 font-mono text-[11px]">📥 Admit: ${snap.admittedIds.join(', ')} → Ready Queue</span>`);
+      }
+      if (snap.preemptedId) {
+        badges.push(`<span class="px-2 py-0.5 rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-mono text-[11px]">🔄 Preempt: ${snap.preemptedId} → Ready Queue</span>`);
+      }
+      if (snap.running) {
+        badges.push(`<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono text-[11px]">⚡ CPU Exec: ${snap.running.id}</span>`);
+      }
+      if (snap.completedId) {
+        badges.push(`<span class="px-2 py-0.5 rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-mono text-[11px]">✅ Exit: ${snap.completedId} → Completed</span>`);
+      }
+      if (badges.length === 0) {
+        badges.push(`<span class="text-[11px] text-notion-lightMuted dark:text-notion-muted italic">No transition at this state</span>`);
+      }
+      document.getElementById('transition-badges-box').innerHTML = badges.join('');
+
+      // 3. Animate SVG Connectors & Preemption Loop Banner
+      const admitLine = document.getElementById('svg-line-admit');
+      const admitHead = document.getElementById('svg-head-admit');
+      const admitLabel = document.getElementById('arrow-admit-label');
+      if (snap.admittedIds && snap.admittedIds.length > 0) {
+        admitLine.setAttribute('class', 'text-blue-500 flow-active');
+        admitHead.setAttribute('class', 'text-blue-500');
+        admitLabel.innerHTML = `<span class="text-blue-500 font-bold">📥 ${snap.admittedIds.join(',')} In!</span>`;
+      } else {
+        admitLine.setAttribute('class', 'text-neutral-400 dark:text-neutral-600');
+        admitHead.setAttribute('class', 'text-neutral-400 dark:text-neutral-600');
+        admitLabel.textContent = 'Admit (AT=t)';
+      }
+
+      const preemptBanner = document.getElementById('preempt-arc-banner');
+      if (snap.preemptedId) {
+        preemptBanner.classList.remove('hidden');
+        document.getElementById('preempt-arc-text').textContent =
+          `${snap.preemptedId} was interrupted on the CPU and moved back into the Ready Queue!`;
+      } else {
+        preemptBanner.classList.add('hidden');
+      }
+
+      // 4. STAGE 1: NOT ARRIVED YET (JOB POOL)
+      const futureProcs = snap.procStates.filter(p => p.status === 'future');
+      document.getElementById('count-future').textContent = futureProcs.length;
+      const allSameATZero = state.processes.every(p => Number(p.at) === 0);
+
+      if (futureProcs.length > 0) {
+        document.getElementById('pool-future').innerHTML = futureProcs.map(p => {
+          const waitToArrive = Math.max(0, p.at - Math.max(0, t));
+          const progressPct = p.at > 0 && t >= 0 ? Math.min(100, Math.round((t / p.at) * 100)) : 0;
+          return `
+            <div class="pcb-card p-2 rounded-lg border ${p.color.border} ${p.color.light} space-y-1">
+              <div class="flex items-center justify-between text-xs mono">
+                <span class="font-bold ${p.color.text}">${p.id}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 font-semibold">
+                  AT = ${p.at}ms
+                </span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-notion-lightMuted dark:text-notion-muted mono">
+                <span>BT: ${p.bt}ms | Prio: ${p.prio}</span>
+                <span class="text-amber-600 dark:text-amber-400 font-semibold">
+                  ${t < 0 ? `Arrives at ${p.at}ms` : `in ${waitToArrive}ms`}
+                </span>
+              </div>
+              <div class="w-full h-1 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+                <div class="h-full bg-amber-500 transition-all duration-300" style="width: ${progressPct}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        if (allSameATZero && t >= 0) {
+          document.getElementById('pool-future').innerHTML = `
+            <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] space-y-1.5">
+              <div class="font-semibold text-amber-600 dark:text-amber-400">All processes have AT = 0 ms</div>
+              <p class="text-[10px] text-notion-lightMuted dark:text-notion-muted leading-relaxed">
+                Because every process has Arrival Time = 0, they all entered the Ready Queue immediately at t = 0.
+              </p>
+              <div class="flex flex-wrap gap-1 pt-0.5">
+                <button onclick="stepToPreArrival()" class="px-2 py-0.5 rounded bg-amber-500 text-white text-[10px] font-semibold">
+                  View Pre-Start Pool
+                </button>
+                <button onclick="staggerArrivalTimes()" class="px-2 py-0.5 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400 text-[10px] font-semibold">
+                  Stagger ATs
+                </button>
+              </div>
+            </div>
+          `;
+        } else {
+          document.getElementById('pool-future').innerHTML = `
+            <div class="h-20 flex flex-col items-center justify-center text-center text-[11px] text-notion-lightMuted dark:text-notion-muted italic">
+              <span>All processes have arrived into RAM (t ≥ max AT)</span>
+              <button onclick="stepToStart()" class="mt-1 not-italic text-[10px] text-blue-500 underline">Rewind to t = 0</button>
+            </div>
+          `;
+        }
+      }
+
+      // 5. STAGE 2: READY QUEUE (RAM)
+      document.getElementById('count-ready').textContent = snap.readyIds.length;
+      const readyContainer = document.getElementById('pool-ready');
+      if (snap.readyIds.length > 0) {
+        readyContainer.innerHTML = snap.readyIds.map((pid, idx) => {
+          const p = snap.procStates.find(x => x.id === pid);
+          const wasJustAdmitted = snap.admittedIds && snap.admittedIds.includes(pid);
+          const wasJustPreempted = snap.preemptedId === pid;
+          return `
+            <div class="pcb-card p-2 rounded-lg border ${p.color.border} ${p.color.light} space-y-0.5">
+              <div class="flex items-center justify-between text-xs mono">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] px-1 rounded bg-blue-600 text-white font-bold">#${idx + 1}</span>
+                  <span class="font-bold ${p.color.text}">${p.id}</span>
+                </div>
+                <span class="text-[10px] font-semibold">Rem: ${p.rem}ms</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] mono text-notion-lightMuted dark:text-notion-muted">
+                <span>WT: ${p.wtSoFar}ms | Prio: ${p.prio}</span>
+                ${wasJustAdmitted ? '<span class="text-blue-500 font-bold">📥 New!</span>' : ''}
+                ${wasJustPreempted ? '<span class="text-rose-500 font-bold">🔄 Preempted</span>' : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        readyContainer.innerHTML = `
+          <div class="h-20 flex items-center justify-center text-[11px] text-notion-lightMuted dark:text-notion-muted italic text-center">
+            Ready Queue is empty at this tick
+          </div>
+        `;
+      }
+
+      // 6. STAGE 3 & 4: DISPATCHER & CPU CORE (RUNNING)
+      const cpuContainer = document.getElementById('pool-cpu');
+      const dispBadge = document.getElementById('dispatcher-badge');
+      const dispDetail = document.getElementById('dispatcher-detail');
+      const stageCpuBox = document.getElementById('stage-box-cpu');
+      const dispLine = document.getElementById('svg-line-dispatch');
+
+      if (snap.running) {
+        const p = snap.procStates.find(x => x.id === snap.running.id);
+        const executedSoFar = p.bt - p.rem;
+        const pct = Math.round(((executedSoFar + 1) / p.bt) * 100);
+
+        stageCpuBox.classList.add('cpu-glow');
+        dispLine.setAttribute('class', 'text-emerald-500 flow-active');
+
+        if (snap.switched) {
+          dispBadge.textContent = '⚡ Context Switch';
+          dispBadge.className = 'mono text-[9px] px-1.5 py-0.5 rounded bg-amber-500 text-white font-bold';
+          dispDetail.textContent = `Loaded PCB of ${p.id} → User Mode`;
+        } else {
+          dispBadge.textContent = 'User Mode';
+          dispBadge.className = 'mono text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-500 font-bold';
+          dispDetail.textContent = `${p.id} running on CPU`;
+        }
+
+        cpuContainer.innerHTML = `
+          <div class="pcb-card w-full p-2.5 rounded-xl border-2 ${p.color.border} ${p.color.light} space-y-2">
+            <div class="flex items-center justify-between mono">
+              <span class="px-2 py-0.5 rounded ${p.color.bg} text-white text-xs font-bold">${p.id} RUNNING</span>
+              <span class="text-xs font-bold ${p.color.text}">Prio: ${p.prio}</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] mono">
+              <span>Burst: ${executedSoFar} → <strong>${executedSoFar + 1}/${p.bt}ms</strong></span>
+              <span>Rem: <strong>${p.rem - 1}ms</strong></span>
+            </div>
+            ${state.algo === 'RR' ? `
+              <div class="text-[10px] mono text-blue-500 font-semibold">
+                ⏱️ Quantum Slice: ${snap.running.sliceUsed} / ${state.tq} ms
+              </div>
+            ` : ''}
+            <div class="w-full h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+              <div class="h-full ${p.color.bg} transition-all duration-300" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      } else {
+        stageCpuBox.classList.remove('cpu-glow');
+        dispLine.setAttribute('class', 'text-neutral-400 dark:text-neutral-600');
+        dispBadge.textContent = t === sim.totalTime ? 'Halted' : 'Idle';
+        dispBadge.className = 'mono text-[9px] px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-notion-lightMuted';
+        dispDetail.textContent = 'Waiting for Ready Queue';
+        cpuContainer.innerHTML = `
+          <div class="text-center text-xs text-notion-lightMuted dark:text-notion-muted mono">
+            ${t < 0 ? '⏳ CPU Not Started' : (t === sim.totalTime ? '🎉 All Jobs Finished' : '💤 CPU Core Idle')}
+          </div>
+        `;
+      }
+
+      // 7. STAGE 5: COMPLETED / TERMINATED
+      const doneProcs = snap.procStates.filter(p => p.status === 'done');
+      document.getElementById('count-done').textContent = doneProcs.length;
+      document.getElementById('pool-done').innerHTML = doneProcs.length > 0
+        ? doneProcs.map(p => {
+            const fullProc = sim.procs.find(x => x.id === p.id);
+            const justFinished = snap.completedId === p.id;
+            return `
+              <div class="pcb-card p-2 rounded-lg border ${p.color.border} ${p.color.light} flex items-center justify-between text-xs mono">
+                <div>
+                  <span class="font-bold ${p.color.text}">${p.id} ✓</span>
+                  ${justFinished ? '<span class="ml-1 text-[9px] px-1 rounded bg-emerald-600 text-white">Just Done!</span>' : ''}
+                </div>
+                <div class="text-[10px] text-notion-lightMuted dark:text-notion-muted">
+                  CT:${fullProc.ct} | WT:${fullProc.wt}
+                </div>
+              </div>
+            `;
+          }).join('')
+        : `<div class="h-20 flex items-center justify-center text-[11px] text-notion-lightMuted dark:text-notion-muted italic">None completed yet</div>`;
+
+      // 8. Render Live Kernel Event Feed up to time t
+      const visibleLogs = sim.logs.filter(l => l.t <= Math.max(0, t)).slice().reverse();
+      const logFeed = document.getElementById('kernel-log-feed');
+      if (t < 0 || visibleLogs.length === 0) {
+        logFeed.innerHTML = `<div class="text-notion-lightMuted dark:text-notion-muted italic">Step forward (+1ms) or click Play to watch OS kernel transitions appear here.</div>`;
+      } else {
+        logFeed.innerHTML = visibleLogs.map(l => {
+          let color = 'text-blue-500';
+          if (l.type === 'PREEMPT') color = 'text-rose-500 font-semibold';
+          if (l.type === 'DISPATCH') color = 'text-emerald-500';
+          if (l.type === 'DONE') color = 'text-purple-500 font-semibold';
+          const isNow = l.t === t;
+          return `<div class="${isNow ? 'bg-blue-500/10 px-1.5 py-0.5 rounded' : 'opacity-80'}"><span class="${color}">${l.text}</span></div>`;
+        }).join('');
+      }
+
+      // 9. Render Gantt Chart
+      renderGanttChart(sim, t);
+    }
+
+    // Manual I/O Request Interactive Demonstration (Section 3B)
+    function triggerManualIO() {
+      const sim = state.simResult;
+      if (!sim) return;
+      const t = Math.max(0, state.currentTime);
+      const snap = sim.snapshots[Math.min(t, sim.totalTime)];
+      const ioPool = document.getElementById('pool-io');
+
+      const activeId = snap && snap.running ? snap.running.id : state.processes[0].id;
+      const p = sim.procs.find(x => x.id === activeId) || sim.procs[0];
+
+      ioPool.innerHTML = `
+        <div class="pcb-card flex flex-wrap items-center justify-between gap-2 w-full p-2 rounded-lg border ${p.color.border} ${p.color.light} text-xs mono">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-amber-500 text-white font-bold">💿 ${p.id} in Waiting Queue</span>
+            <span>State: <strong>Running → I/O Request → Waiting Queue</strong></span>
+          </div>
+          <button onclick="completeManualIO('${p.id}')" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-sans font-semibold">
+            ✓ Complete I/O (Move to Ready Queue)
+          </button>
+        </div>
+      `;
+    }
+
+    function completeManualIO(pid) {
+      const ioPool = document.getElementById('pool-io');
+      ioPool.innerHTML = `
+        <div class="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium w-full flex items-center justify-between">
+          <span>✅ <strong>I/O Complete Interrupt!</strong> Process <strong>${pid}</strong> moved from <strong>Device/Waiting Queue → Ready Queue (RAM)</strong>.</span>
+          <button onclick="resetManualIO()" class="text-[11px] underline ml-2">Clear</button>
+        </div>
+      `;
+    }
+
+    function resetManualIO() {
+      document.getElementById('pool-io').innerHTML = `
+        <span class="text-xs text-notion-lightMuted dark:text-notion-muted italic">
+          No process blocked on I/O. Click "💿 Simulate I/O Request" above while a process is on the CPU to watch it move here!
+        </span>
+      `;
+    }
+
+    function renderGanttChart(sim, currentT) {
+      const container = document.getElementById('gantt-container');
+      const showFull = document.getElementById('show-full-gantt').checked;
+      const total = sim.totalTime || 1;
+      const clampedT = Math.max(0, currentT);
+
+      const blocksHtml = sim.gantt.map(block => {
+        const widthPct = ((block.end - block.start) / total) * 100;
+        const isCurrent = currentT >= 0 && block.start <= currentT && currentT < block.end;
+        const isFuture = block.start > clampedT;
+
+        let opacityClass = 'opacity-100';
+        if (currentT < 0 || isFuture) {
+          opacityClass = showFull ? 'opacity-40' : 'opacity-10';
+        }
+
+        const bgClass = block.id === 'IDLE'
+          ? 'bg-neutral-400/30 dark:bg-neutral-700/40 text-notion-lightMuted dark:text-notion-muted border border-dashed border-neutral-400'
+          : `${block.color.bg} text-white`;
+
+        const activeRing = isCurrent ? 'ring-2 ring-offset-2 ring-blue-500 dark:ring-offset-notion-bg z-10 brightness-110' : '';
+
+        return `
+          <div onclick="scrubTime(${block.start})"
+               style="width: ${widthPct}%"
+               title="Click to jump clock to t = ${block.start} ms (${block.id}: ${block.start}–${block.end} ms)"
+               class="group relative h-12 ${bgClass} ${opacityClass} ${activeRing} first:rounded-l-lg last:rounded-r-lg border-r border-white/25 flex flex-col items-center justify-center cursor-pointer transition-all hover:brightness-110 select-none">
+            <span class="mono text-xs font-bold truncate px-1">${block.id}</span>
+            <span class="mono text-[10px] opacity-85">${block.end - block.start}ms</span>
+            <span class="absolute -bottom-5 left-0 -translate-x-1/2 mono text-[10px] text-notion-lightMuted dark:text-notion-muted">
+              ${block.start}
+            </span>
+          </div>
+        `;
+      }).join('');
+
+      const playheadPct = Math.min(100, Math.max(0, (clampedT / total) * 100));
+
+      container.innerHTML = `
+        <div class="relative pt-2 pb-5 px-2">
+          <div style="left: calc(${playheadPct}%)" class="absolute top-0 bottom-3 w-0.5 bg-rose-500 z-20 pointer-events-none transition-all duration-150">
+            <div class="px-1.5 py-0.5 rounded bg-rose-500 text-white mono text-[9px] font-bold -translate-x-1/2 -translate-y-4 shadow">
+              t=${clampedT}
+            </div>
+          </div>
+          <div class="flex w-full rounded-lg relative">
+            ${blocksHtml}
+            <span class="absolute -bottom-5 right-0 translate-x-1/2 mono text-[10px] font-bold text-notion-lightText dark:text-notion-text">
+              ${sim.totalTime}
+            </span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMetricsTable() {
+      const sim = state.simResult;
+      if (!sim || sim.procs.length === 0) return;
+
+      const n = sim.procs.length;
+      let sumTat = 0, sumWt = 0, sumRt = 0;
+
+      document.getElementById('metrics-table-body').innerHTML = sim.procs.map(p => {
+        sumTat += p.tat;
+        sumWt += p.wt;
+        sumRt += p.rt;
+        return `
+          <tr class="hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
+            <td class="py-2 px-2 font-bold flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full ${p.color.bg}"></span>
+              <span>${p.id}</span>
+            </td>
+            <td class="py-2 px-2">${p.at} ms</td>
+            <td class="py-2 px-2">${p.bt} ms</td>
+            <td class="py-2 px-2">${p.prio}</td>
+            <td class="py-2 px-2">${p.firstStart} ms</td>
+            <td class="py-2 px-2 font-bold">${p.ct} ms</td>
+            <td class="py-2 px-2 text-blue-600 dark:text-blue-400">
+              <span class="opacity-70">${p.ct} − ${p.at} =</span> <strong>${p.tat} ms</strong>
+            </td>
+            <td class="py-2 px-2 text-emerald-600 dark:text-emerald-400">
+              <span class="opacity-70">${p.tat} − ${p.bt} =</span> <strong>${p.wt} ms</strong>
+            </td>
+            <td class="py-2 px-2 text-purple-600 dark:text-purple-400">
+              <span class="opacity-70">${p.firstStart} − ${p.at} =</span> <strong>${p.rt} ms</strong>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      const avgTat = (sumTat / n).toFixed(2);
+      const avgWt = (sumWt / n).toFixed(2);
+      const avgRt = (sumRt / n).toFixed(2);
+
+      document.getElementById('metrics-table-foot').innerHTML = `
+        <tr>
+          <td colspan="6" class="py-2.5 px-2 text-right uppercase text-[11px] tracking-wider text-notion-lightMuted dark:text-notion-muted">
+            Average (${n} Processes):
+          </td>
+          <td class="py-2.5 px-2 text-blue-600 dark:text-blue-400">${sumTat}/${n} = ${avgTat} ms</td>
+          <td class="py-2.5 px-2 text-emerald-600 dark:text-emerald-400">${sumWt}/${n} = ${avgWt} ms</td>
+          <td class="py-2.5 px-2 text-purple-600 dark:text-purple-400">${sumRt}/${n} = ${avgRt} ms</td>
+        </tr>
+      `;
+
+      document.getElementById('kpi-tat').textContent = `${avgTat} ms`;
+      document.getElementById('kpi-wt').textContent = `${avgWt} ms`;
+      document.getElementById('kpi-rt').textContent = `${avgRt} ms`;
+
+      const utilPct = sim.totalTime > 0 ? ((sim.busyTime / sim.totalTime) * 100).toFixed(1) : '0.0';
+      document.getElementById('kpi-util').textContent = `${utilPct}%`;
+      document.getElementById('kpi-util-sub').textContent = `${sim.busyTime} ms busy / ${sim.totalTime} ms total`;
+
+      const throughput = sim.totalTime > 0 ? (n / sim.totalTime).toFixed(3) : '0';
+      document.getElementById('kpi-throughput').textContent = `${throughput} proc/ms`;
+      document.getElementById('kpi-throughput-sub').textContent = `${n} processes / ${sim.totalTime} ms`;
+
+      document.getElementById('kpi-switches').textContent = `${sim.contextSwitches} switches`;
+    }
+
+    function renderComparisonTable() {
+      const algos = ['FCFS', 'SJF', 'SRTF', 'LJF', 'LRTF', 'PRIO_NP', 'PRIO_P', 'RR', 'HRRN'];
+      const results = algos.map(a => {
+        const res = simulateScheduling(state.processes, a, state.tq, state.prioRule);
+        const n = res.procs.length || 1;
+        const avgTat = res.procs.reduce((s, p) => s + p.tat, 0) / n;
+        const avgWt = res.procs.reduce((s, p) => s + p.wt, 0) / n;
+        const avgRt = res.procs.reduce((s, p) => s + p.rt, 0) / n;
+        return { algo: a, res, avgTat, avgWt, avgRt };
+      });
+
+      const minWt = Math.min(...results.map(r => r.avgWt));
+
+      document.getElementById('compare-table-body').innerHTML = results.map(item => {
+        const info = ALGO_INFO[item.algo];
+        const isBest = Math.abs(item.avgWt - minWt) < 1e-5;
+        const total = item.res.totalTime || 1;
+
+        const miniGantt = item.res.gantt.map(g => {
+          const w = ((g.end - g.start) / total) * 100;
+          const bg = g.id === 'IDLE' ? 'bg-neutral-500/30' : g.color.bg;
+          return `<div style="width:${w}%" class="h-4 ${bg} first:rounded-l last:rounded-r border-r border-white/20 text-[9px] text-white mono flex items-center justify-center overflow-hidden" title="${g.id} (${g.start}-${g.end})">${g.id}</div>`;
+        }).join('');
+
+        return `
+          <tr class="${item.algo === state.algo ? 'bg-blue-500/5' : ''}">
+            <td class="py-2.5 px-3 font-bold">
+              ${item.algo === 'RR' ? `Round Robin (TQ=${state.tq})` : info.name.split('(')[0]}
+              ${isBest ? '<span class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-500">★ Best WT</span>' : ''}
+            </td>
+            <td class="py-2.5 px-3">
+              <span class="text-[10px] px-2 py-0.5 rounded ${info.preemptive ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'}">
+                ${info.preemptive ? 'Preemptive' : 'Non-Preemptive'}
+              </span>
+            </td>
+            <td class="py-2.5 px-3 mono font-semibold text-blue-500">${item.avgTat.toFixed(2)} ms</td>
+            <td class="py-2.5 px-3 mono font-bold ${isBest ? 'text-emerald-500' : ''}">${item.avgWt.toFixed(2)} ms</td>
+            <td class="py-2.5 px-3 mono text-purple-500">${item.avgRt.toFixed(2)} ms</td>
+            <td class="py-2.5 px-3 mono">${item.res.contextSwitches}</td>
+            <td class="py-2.5 px-3 min-w-[180px]">
+              <div class="flex w-full rounded overflow-hidden">${miniGantt}</div>
+            </td>
+            <td class="py-2.5 px-3">
+              <button onclick="setAlgorithm('${item.algo}'); switchTab('simulator');" class="text-xs px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium">
+                Simulate
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // =========================================================================
+    // CONTROLS & HANDLERS
+    // =========================================================================
+    function setAlgorithm(algo) {
+      stopPlay();
+      state.algo = algo;
+      recomputeAndRender(true);
+    }
+
+    function loadPreset(presetKey) {
+      stopPlay();
+      const preset = PRESETS[presetKey];
+      if (!preset) return;
+      state.currentPreset = presetKey;
+      state.algo = preset.algo;
+      state.tq = preset.tq;
+      state.prioRule = preset.prioRule;
+      state.processes = JSON.parse(JSON.stringify(preset.processes));
+
+      document.getElementById('tq-slider').value = state.tq;
+      updateTQLabel(state.tq);
+      updatePrioButtons();
+      recomputeAndRender(true);
+    }
+
+    function resetToCurrentPreset() {
+      loadPreset(state.currentPreset);
+    }
+
+    function staggerArrivalTimes() {
+      stopPlay();
+      state.processes.forEach((p, idx) => {
+        p.at = idx * 2;
+      });
+      recomputeAndRender(true);
+    }
+
+    function updateTQ(val) {
+      stopPlay();
+      state.tq = Number(val) || 2;
+      updateTQLabel(state.tq);
+      recomputeAndRender(false);
+    }
+
+    function updateTQLabel(tq) {
+      document.getElementById('tq-value').textContent = `${tq} ms`;
+      const hint = document.getElementById('tq-hint');
+      if (tq === 1) {
+        hint.textContent = '⚠️ High context-switch overhead';
+        hint.className = 'text-[11px] text-rose-500 font-medium';
+      } else if (tq >= 7) {
+        hint.textContent = '⚠️ Degenerates toward FCFS';
+        hint.className = 'text-[11px] text-amber-500 font-medium';
+      } else {
+        hint.textContent = '✓ Optimal time-sharing slice';
+        hint.className = 'text-[11px] text-emerald-500 font-medium';
+      }
+    }
+
+    function setPriorityRule(rule) {
+      stopPlay();
+      state.prioRule = rule;
+      updatePrioButtons();
+      recomputeAndRender(false);
+    }
+
+    function updatePrioButtons() {
+      const btnLow = document.getElementById('prio-rule-lower');
+      const btnHigh = document.getElementById('prio-rule-higher');
+      if (state.prioRule === 'lower') {
+        btnLow.className = 'px-2 py-0.5 rounded text-xs font-medium bg-purple-600 text-white';
+        btnHigh.className = 'px-2 py-0.5 rounded text-xs font-medium bg-transparent text-notion-lightMuted dark:text-notion-muted';
+      } else {
+        btnHigh.className = 'px-2 py-0.5 rounded text-xs font-medium bg-purple-600 text-white';
+        btnLow.className = 'px-2 py-0.5 rounded text-xs font-medium bg-transparent text-notion-lightMuted dark:text-notion-muted';
+      }
+    }
+
+    function updateProcessField(idx, field, value) {
+      stopPlay();
+      const num = Number(value);
+      if (field === 'at') state.processes[idx].at = Math.max(0, isNaN(num) ? 0 : num);
+      if (field === 'bt') state.processes[idx].bt = Math.max(1, isNaN(num) ? 1 : num);
+      if (field === 'prio') state.processes[idx].prio = Math.max(1, isNaN(num) ? 1 : num);
+      recomputeAndRender(false);
+    }
+
+    function addProcess() {
+      stopPlay();
+      const nextNum = state.processes.length + 1;
+      state.processes.push({
+        id: `P${nextNum}`,
+        at: state.processes.length * 2,
+        bt: 4,
+        prio: nextNum
+      });
+      recomputeAndRender(false);
+    }
+
+    function removeProcess(idx) {
+      if (state.processes.length <= 1) return;
+      stopPlay();
+      state.processes.splice(idx, 1);
+      recomputeAndRender(false);
+    }
+
+    // Clock Navigation
+    function scrubTime(val) {
+      stopPlay();
+      state.currentTime = Number(val);
+      renderSimulationAtTime();
+    }
+
+    function stepToPreArrival() {
+      stopPlay();
+      state.currentTime = -1;
+      renderSimulationAtTime();
+    }
+
+    function stepToStart() {
+      stopPlay();
+      state.currentTime = 0;
+      renderSimulationAtTime();
+    }
+
+    function stepToEnd() {
+      stopPlay();
+      state.currentTime = state.simResult ? state.simResult.totalTime : 0;
+      renderSimulationAtTime();
+    }
+
+    function stepForward() {
+      stopPlay();
+      if (!state.simResult) return;
+      state.currentTime = Math.min(state.simResult.totalTime, state.currentTime + 1);
+      renderSimulationAtTime();
+    }
+
+    function stepBackward() {
+      stopPlay();
+      state.currentTime = Math.max(-1, state.currentTime - 1);
+      renderSimulationAtTime();
+    }
+
+    function togglePlay() {
+      if (state.playInterval) {
+        stopPlay();
+      } else {
+        if (state.simResult && state.currentTime >= state.simResult.totalTime) {
+          state.currentTime = -1;
+        }
+        document.getElementById('play-icon').textContent = '⏸';
+        document.getElementById('play-label').textContent = 'Pause';
+        renderSimulationAtTime();
+        state.playInterval = setInterval(() => {
+          if (!state.simResult || state.currentTime >= state.simResult.totalTime) {
+            stopPlay();
+            return;
+          }
+          state.currentTime += 1;
+          renderSimulationAtTime();
+        }, state.playSpeed);
+      }
+    }
+
+    function stopPlay() {
+      if (state.playInterval) {
+        clearInterval(state.playInterval);
+        state.playInterval = null;
+      }
+      document.getElementById('play-icon').textContent = '▶';
+      document.getElementById('play-label').textContent = 'Play Step-by-Step';
+    }
+
+    function updateSpeed(ms) {
+      state.playSpeed = Number(ms) || 600;
+      if (state.playInterval) {
+        stopPlay();
+        togglePlay();
+      }
+    }
+
+    // =========================================================================
+    // TAB 3: CONCEPT EXPLORER & AGING
+    // =========================================================================
+    function setConceptDemo(mode) {
+      const btnNp = document.getElementById('cd-io_np');
+      const btnP = document.getElementById('cd-io_p');
+      const box = document.getElementById('concept-demo-box');
+
+      if (mode === 'io_p') {
+        btnP.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white';
+        btnNp.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold border border-notion-lightBorder dark:border-notion-border';
+        box.innerHTML = `
+          <div class="font-bold text-emerald-500">⚡ Preemptive Scheduling (Notes Section 1)</div>
+          <p class="text-notion-lightMuted dark:text-notion-muted">
+            "After P1 goes for I/O (or a higher-priority process arrives at t = 1), P2 immediately comes into the CPU and utilizes it." The OS moves the interrupted process from <strong>Running → Ready/Waiting</strong> so no CPU cycles are wasted.
+          </p>
+          <div class="flex flex-wrap items-center gap-1.5 mono text-[11px] pt-1">
+            <span class="px-2.5 py-1 rounded bg-blue-600 text-white font-bold">P1 (0–1ms)</span>
+            <span class="text-amber-500 font-bold">→ I/O or Preempt →</span>
+            <span class="px-3 py-1 rounded bg-emerald-600 text-white font-bold">P2 Runs Immediately on CPU!</span>
+            <span>→</span>
+            <span class="px-2.5 py-1 rounded bg-blue-600 text-white font-bold">P1 Resumes Later</span>
+          </div>
+        `;
+      } else {
+        btnNp.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white';
+        btnP.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold border border-notion-lightBorder dark:border-notion-border';
+        box.innerHTML = `
+          <div class="font-bold text-amber-500">🔒 Non-Preemptive Scheduling (Notes Section 1)</div>
+          <p class="text-notion-lightMuted dark:text-notion-muted">
+            "Once a process starts using the CPU, the OS cannot forcibly take away the CPU. And in basic non-preemptive I/O handling from your notes: after P1 goes for I/O, the CPU remains idle until P1 finishes I/O and comes back."
+          </p>
+          <div class="flex flex-wrap items-center gap-1.5 mono text-[11px] pt-1">
+            <span class="px-2.5 py-1 rounded bg-blue-600 text-white font-bold">P1 Starts</span>
+            <span>→</span>
+            <span class="px-2.5 py-1 rounded bg-neutral-500/30 text-notion-lightMuted">CPU Held / Idle During P1 I/O</span>
+            <span>→</span>
+            <span class="px-2.5 py-1 rounded bg-blue-600 text-white font-bold">P1 Finishes</span>
+            <span>→</span>
+            <span class="px-2.5 py-1 rounded bg-emerald-600 text-white font-bold">P2 Finally Runs</span>
+          </div>
+        `;
+      }
+    }
+
+    let agingState = { wait: 0, prio: 10 };
+    function stepAging() {
+      agingState.wait += 2;
+      agingState.prio = Math.max(1, agingState.prio - 2);
+      renderAging();
+    }
+    function resetAging() {
+      agingState = { wait: 0, prio: 10 };
+      renderAging();
+    }
+    function renderAging() {
+      document.getElementById('aging-wait').textContent = `${agingState.wait} ms`;
+      document.getElementById('aging-prio').textContent =
+        agingState.prio === 1 ? '1 (Highest Priority!)' : `${agingState.prio}`;
+      const pct = Math.min(100, Math.round(((11 - agingState.prio) / 10) * 100));
+      document.getElementById('aging-bar').style.width = `${pct}%`;
+      const status = document.getElementById('aging-status');
+      if (agingState.prio === 1) {
+        status.innerHTML = `<strong class="text-emerald-500">🎉 P_Low reached Priority 1 via Aging and gets dispatched onto the CPU! Starvation solved.</strong>`;
+      } else {
+        status.textContent = `⏳ Aging promoted P_Low priority to ${agingState.prio}. Click +Age to continue...`;
+      }
+    }
+
+    // =========================================================================
+    // TAB 4: QUIZ ENGINE
+    // =========================================================================
+    const QUIZ_QUESTIONS = [
+      {
+        q: '1. In FCFS scheduling, what is the phenomenon called when short processes get stuck waiting behind a single long CPU-bound process?',
+        options: ['Starvation', 'Convoy Effect', 'Aging', 'Context Switching'],
+        answer: 1,
+        explain: 'The Convoy Effect occurs in Non-Preemptive FCFS (and LJF) when a long burst process holds the CPU, forcing shorter processes to queue behind it.'
+      },
+      {
+        q: '2. Process P1 arrives at AT = 2 ms with Burst Time BT = 5 ms, and completes at CT = 12 ms. Calculate its Turnaround Time (TAT) and Waiting Time (WT).',
+        options: ['TAT = 10 ms, WT = 5 ms', 'TAT = 12 ms, WT = 7 ms', 'TAT = 7 ms, WT = 2 ms', 'TAT = 10 ms, WT = 7 ms'],
+        answer: 0,
+        explain: 'TAT = CT − AT = 12 − 2 = 10 ms. WT = TAT − BT = 10 − 5 = 5 ms.'
+      },
+      {
+        q: '3. Which OS component performs context switching, switches to user mode, and jumps to the proper location in the selected program?',
+        options: ['Long-Term Scheduler', 'CPU Scheduler', 'Dispatcher', 'Job Pool'],
+        answer: 2,
+        explain: 'The CPU Scheduler selects which process runs next; the Dispatcher performs the actual context switch and mode transition.'
+      },
+      {
+        q: '4. Which scheduling algorithm is optimal in terms of providing the minimum average Waiting Time?',
+        options: ['Round Robin (RR)', 'First Come First Served (FCFS)', 'Shortest Job First (SJF / SRTF)', 'Longest Job First (LJF)'],
+        answer: 2,
+        explain: 'SJF (and preemptive SRTF) minimizes average waiting time by always executing the shortest burst first.'
+      },
+      {
+        q: '5. What happens in Round Robin scheduling if the Time Quantum (TQ) is set larger than every process Burst Time?',
+        options: ['Excessive context switching', 'Behavior approaches FCFS', 'Behavior approaches SJF', 'Deadlock occurs'],
+        answer: 1,
+        explain: 'When TQ exceeds every burst time, each process completes in one turn in arrival order—identical to FCFS.'
+      },
+      {
+        q: '6. Which technique prevents starvation in Priority Scheduling by gradually increasing the priority of waiting processes?',
+        options: ['Convoy Effect', 'Dispatching', 'Time Slicing', 'Aging'],
+        answer: 3,
+        explain: 'Aging gradually boosts a process’s priority the longer it waits in the Ready Queue.'
+      }
+    ];
+
+    let quizAnswers = {};
+    function renderQuiz() {
+      const container = document.getElementById('quiz-container');
+      let score = 0;
+      Object.keys(quizAnswers).forEach(idx => {
+        if (quizAnswers[idx] === QUIZ_QUESTIONS[idx].answer) score++;
+      });
+      document.getElementById('quiz-score-badge').textContent = `Score: ${score} / ${QUIZ_QUESTIONS.length}`;
+
+      container.innerHTML = QUIZ_QUESTIONS.map((item, qIdx) => {
+        const picked = quizAnswers[qIdx];
+        const hasAnswered = picked !== undefined;
+        const optsHtml = item.options.map((opt, oIdx) => {
+          let btnStyle = 'border-notion-lightBorder dark:border-notion-border hover:bg-black/5 dark:hover:bg-white/5';
+          if (hasAnswered) {
+            if (oIdx === item.answer) {
+              btnStyle = 'border-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold';
+            } else if (oIdx === picked && oIdx !== item.answer) {
+              btnStyle = 'border-rose-500 bg-rose-500/15 text-rose-500';
+            }
+          }
+          return `<button onclick="answerQuiz(${qIdx}, ${oIdx})" class="w-full text-left px-3 py-2 rounded-lg border text-xs transition ${btnStyle}">${opt}</button>`;
+        }).join('');
+
+        return `
+          <div class="p-4 rounded-xl bg-white dark:bg-notion-bg border border-notion-lightBorder dark:border-notion-border space-y-2.5">
+            <div class="text-xs font-bold leading-relaxed">${item.q}</div>
+            <div class="space-y-1.5">${optsHtml}</div>
+            ${hasAnswered ? `<div class="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px]"><strong>Explanation:</strong> ${item.explain}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+    function answerQuiz(qIdx, oIdx) { quizAnswers[qIdx] = oIdx; renderQuiz(); }
+    function resetQuiz() { quizAnswers = {}; renderQuiz(); }
+
+    // =========================================================================
+    // TAB & THEME SWITCHING
+    // =========================================================================
+    function switchTab(tabName) {
+      stopPlay();
+      ['simulator', 'compare', 'concepts', 'quiz'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tabName);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tabName) {
+          btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-600 text-white shadow-sm';
+        } else {
+          btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-notion-lightMuted dark:text-notion-muted';
+        }
+      });
+      if (tabName === 'compare') renderComparisonTable();
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      html.classList.toggle('dark');
+      const isDark = html.classList.contains('dark');
+      document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setConceptDemo('io_p');
+      renderAging();
+      renderQuiz();
+      loadPreset('srtf_s2'); // Loads with staggered ATs (0, 1, 2) at t = 0 so "Not Arrived Yet" is immediately active!
+    });
+  </script>
+</body>
+</html>
